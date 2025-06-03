@@ -1,0 +1,331 @@
+# GML Cooldown Struct
+
+A lightweight GameMaker library that provides a reusable, struct-based cooldown/timer system. Encapsulate all timing logic (start, update, pause, resume, reset) in one clean object, with optional callbacks and percent-based progress for easy UI integration. No more scattered timer variables—just create a `Cooldown` struct and call `start()`, `update()`, and `ready()`.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Creating a Cooldown](#creating-a-cooldown)
+  - [Updating Each Step](#updating-each-step)
+  - [Checking & Starting](#checking--starting)
+  - [Optional Pause / Resume](#optional-pause--resume)
+  - [Visual Feedback](#visual-feedback)
+- [API Reference](#api-reference)
+- [Example Project](#example-project)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Features
+
+- **Encapsulation**: All cooldown data and behavior lives in one struct—no more separate `*_timer` or `*_ready` variables.
+- **Reusability**: Create as many independent cooldowns as you need (e.g., fire, dash, shield).
+- **Callbacks**: Pass an `on_complete` function that runs exactly when the cooldown finishes.
+- **Pause & Resume**: Temporarily halt any cooldown without resetting it.
+- **Progress Percentage**: Get a 0–1 value (`percent()`) to drive visual bars, radial indicators, shaders, and more.
+- **Lightweight**: Small, zero-dependency GML script that works in any GameMaker 2.3+ project.
+
+---
+
+## Installation
+
+1. **Download or copy** the `scr_Cooldown.gml` script into your GameMaker project’s **Scripts** folder.
+2. No additional assets or DLLs are required—everything runs in pure GML.
+
+> **Tip:** You can also rename the file to match your project’s naming convention (for example, `scr_CooldownSystem.gml`), but keep the function name `Cooldown` intact.
+
+---
+
+## Usage
+
+### Creating a Cooldown
+
+In the **Create Event** of any object (e.g., `obj_player`), instantiate one or more cooldown structs:
+
+```
+/// obj_player Create Event
+
+// A 30-frame (0.5 sec @ 60 fps) “fire” cooldown with an on_complete callback
+fire_cd = Cooldown(30, function() {
+    show_debug_message("Fire is ready!");
+});
+
+// A 60-frame (1 sec @ 60 fps) “dash” cooldown
+dash_cd = Cooldown(60, function() {
+    show_debug_message("Dash is ready!");
+});
+```
+
+- The first argument (`30` or `60`) is `time_max` (in frames).
+- The second (optional) argument is a function that will be called once the cooldown reaches zero.
+
+### Updating Each Step
+
+Call `update()` on each struct in the **Step Event** to decrement timers:
+
+```
+/// obj_player Step Event
+
+fire_cd.update();
+dash_cd.update();
+```
+
+### Checking & Starting
+
+Before using an ability, check `ready()`. If it returns `true`, call `start()` to trigger the cooldown:
+
+```
+/// obj_player Step Event (continued)
+
+// Fire a bullet when space is pressed and cooldown is ready
+if (keyboard_check_pressed(vk_space) && fire_cd.ready()) {
+    // Fire bullet logic here…
+    fire_cd.start();
+}
+
+// Dash when Shift is pressed and dash cooldown is ready
+if (keyboard_check_pressed(vk_shift) && dash_cd.ready()) {
+    // Dash logic here…
+    dash_cd.start();
+}
+```
+
+- **`ready()`** returns `true` when `time_left == 0`.
+- **`start()`** sets `time_left = time_max`, flips `active = true`, and resets `paused = false`.
+
+### Optional Pause / Resume
+
+You can temporarily pause a running cooldown (for example, during a global pause screen) without resetting it:
+
+```
+// Pause all cooldowns
+fire_cd.pause();
+dash_cd.pause();
+
+// Later, resume them
+fire_cd.resume();
+dash_cd.resume();
+```
+
+- **`pause()`** halts countdown; **`resume()`** continues from where it left off.
+
+### Visual Feedback
+
+Use `percent()` (returns a 0–1 float) to draw a progress bar or any other indicator in the **Draw Event**:
+
+```
+/// obj_player Draw Event
+
+// Draw the player sprite as usual
+draw_self();
+
+// Draw a simple cooldown bar above the player’s head
+var bar_w   = 32;
+var bar_h   = 5;
+var offsetY = -16;  // Pixels above the player sprite
+var p       = fire_cd.percent();  // 0.0 (empty) → 1.0 (full)
+
+draw_set_color(c_gray);
+draw_rectangle(
+    x - bar_w/2, 
+    y + offsetY, 
+    x + bar_w/2, 
+    y + offsetY + bar_h, 
+    false
+);
+
+draw_set_color(c_lime);
+draw_rectangle(
+    x - bar_w/2, 
+    y + offsetY, 
+    x - bar_w/2 + (bar_w * p), 
+    y + offsetY + bar_h, 
+    false
+);
+
+// Reset draw color
+draw_set_color(c_white);
+```
+
+---
+
+## API Reference
+
+Below is a quick overview of the `Cooldown` struct’s properties and methods.
+
+```
+cooldown_instance = Cooldown(time_max, on_complete_function);
+```
+
+- **`time_max`** (`real`)  
+  Total number of frames the cooldown lasts (e.g., `30` for 0.5 sec at 60 fps).
+
+- **`time_left`** (`real`)  
+  Current remaining frames (counts down from `time_max` to `0`). Initially `0` (meaning “ready”).
+
+- **`active`** (`bool`)  
+  `true` while the cooldown is counting down. Set to `false` when it finishes.
+
+- **`paused`** (`bool`)  
+  `true` if the cooldown is temporarily halted.
+
+- **`on_complete`** (`function`)  
+  A callback function that runs once when `time_left` transitions from `1` to `0`.
+
+### Methods
+
+1. **`start()`**  
+   - Description: Reset and activate the cooldown.  
+   - Behavior:  
+     ```
+     self.time_left = self.time_max;
+     self.active    = true;
+     self.paused    = false;
+     ```  
+   - Usage: Call when you trigger an ability or action.
+
+2. **`update()`**  
+   - Description: Decrement `time_left` if `active` and not `paused`. If `time_left <= 0`, clamp to `0`, set `active = false`, and run `on_complete()`.  
+   - Usage: Call every Step Event (e.g., `fire_cd.update();`).
+
+3. **`pause()`**  
+   - Description: Temporarily halt countdown. Does not reset `time_left`.  
+   - Usage: Call when you need to freeze all timers (e.g., during a pause menu).
+
+4. **`resume()`**  
+   - Description: Resume countdown from current `time_left` if `active`.  
+   - Usage: Call when unpausing the game.
+
+5. **`reset()`**  
+   - Description: Instantly cancel the cooldown—sets `time_left = 0`, `active = false`, `paused = false`.  
+   - Usage: Call if you want to immediately make the ability ready again (e.g., a power-up that resets all cooldowns).
+
+6. **`ready()`** → `bool`  
+   - Description: Returns `true` if `time_left == 0` (i.e., not active).  
+   - Usage: Check before allowing an action (e.g., `if fire_cd.ready() { … }`).
+
+7. **`percent()`** → `real (0.0 – 1.0)`  
+   - Description: Returns `1 - (time_left / time_max)`.  
+   - Usage: Use for drawing UI (bars, radial indicators) or tweening effects.  
+
+---
+
+## Example Project
+
+Below is a minimal example of a player object using two cooldowns (fire and dash) with visual feedback:
+
+```
+// scr_Cooldown.gml (placed in Scripts folder)
+function Cooldown(_max_time, _on_complete) {
+    return {
+        time_max:    _max_time,
+        time_left:   0,
+        active:      false,
+        paused:      false,
+        on_complete: _on_complete ?? function() {},
+
+        start: function() {
+            self.time_left = self.time_max;
+            self.active    = true;
+            self.paused    = false;
+        },
+
+        update: function() {
+            if (self.active && !self.paused) {
+                self.time_left -= 1;
+                if (self.time_left <= 0) {
+                    self.time_left = 0;
+                    self.active    = false;
+                    self.on_complete();
+                }
+            }
+        },
+
+        pause: function() {
+            self.paused = true;
+        },
+
+        resume: function() {
+            self.paused = false;
+        },
+
+        reset: function() {
+            self.time_left = 0;
+            self.active    = false;
+            self.paused    = false;
+        },
+
+        ready: function() {
+            return !self.active;
+        },
+
+        percent: function() {
+            return clamp(1 - (self.time_left / self.time_max), 0, 1);
+        }
+    };
+}
+
+// obj_player Create Event
+fire_cd = Cooldown(30, function() {
+    show_debug_message("Fire ready!");
+});
+dash_cd = Cooldown(60, function() {
+    show_debug_message("Dash ready!");
+});
+
+// obj_player Step Event
+fire_cd.update();
+dash_cd.update();
+
+if (keyboard_check_pressed(vk_space) && fire_cd.ready()) {
+    // Fire logic here
+    fire_cd.start();
+}
+
+if (keyboard_check_pressed(vk_shift) && dash_cd.ready()) {
+    // Dash logic here
+    dash_cd.start();
+}
+
+// obj_player Draw Event
+draw_self();
+
+// Draw Fire Cooldown Bar
+var bar_w   = 32;
+var bar_h   = 5;
+var offsetY = -16;
+var p_fire  = fire_cd.percent();
+
+draw_set_color(c_gray);
+draw_rectangle(x - bar_w/2, y + offsetY, x + bar_w/2, y + offsetY + bar_h, false);
+
+draw_set_color(c_lime);
+draw_rectangle(x - bar_w/2, y + offsetY, x - bar_w/2 + (bar_w * p_fire), y + offsetY + bar_h, false);
+
+draw_set_color(c_white);
+```
+
+---
+
+## Contributing
+
+Contributions, issues, and feature requests are welcome! Feel free to:
+
+1. Fork this repository.
+2. Create a new branch (`git checkout -b feature/YourFeature`).
+3. Make your changes and commit (`git commit -m "Add new feature"`).
+4. Push to the branch (`git push origin feature/YourFeature`).
+5. Open a Pull Request.
+
+Please ensure code style consistency and include examples or documentation for any new behavior.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
